@@ -140,7 +140,7 @@ Sober prefers files from `asset_overlay` over the APK.
 └── sober/asset_overlay/   # transparent cursor textures
 ~/.local/share/applications/org.vinegarhq.Sober.desktop
 ```
-
+MADE WITH AI
 ## License
 
 MIT — see [LICENSE](LICENSE).
