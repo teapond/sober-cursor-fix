@@ -1,88 +1,107 @@
 # sober-cursor-fix
 
-Keep the **native desktop cursor visible** in [Sober](https://github.com/VinegarHQ/Sober)
-and hide Roblox's own in-game cursor.
+**Makes the normal mouse cursor visible in Sober on Wayland and removes
+Roblox's own cursor.**
 
-> Unofficial community workaround. Not affiliated with Roblox or VinegarHQ.
+[Русская версия →](README.ru.md)
 
-## The problem
+Sober hides your desktop cursor and draws its own. This tool fixes both: your
+system cursor stays visible, and Roblox's duplicate cursor disappears.
 
-Sober renders Roblox through SDL. On Wayland, SDL hides the compositor cursor
-with
+## Quick start
 
-```c
-wl_pointer.set_cursor(serial, NULL, 0, 0)
+```sh
+git clone https://github.com/teapond/my-project.git
+cd my-project
+./install.sh
 ```
 
-and never asks the compositor for a cursor shape. The result is an invisible
-pointer over the Sober window. On top of that, Roblox draws its own cursor from
-PNG textures, so even if the host cursor were visible you would see two
-cursors.
+No `sudo`, no root. Everything is installed in your home folder.
 
-## The fix
+Then open **Sober** from the application menu.
 
-This project does two independent things:
+> Don't want to use git? On GitHub click **Code → Download ZIP**, unpack it,
+> open a terminal in that folder and run `./install.sh`.
 
-1. **`wlproxy`** — a tiny Wayland socket proxy that sits between Sober and the
-   compositor. It parses only the client → server direction and drops
-   `wl_pointer.set_cursor(..., NULL, ...)` requests. Everything else, including
-   `SCM_RIGHTS` file descriptors, is forwarded verbatim. The compositor keeps
-   drawing its normal cursor.
-2. **Transparent cursor textures** — Roblox's cursor PNGs are replaced with
-   fully transparent same-size PNGs through Sober's
-   [`asset_overlay`](https://vinegarhq.org/Sober/Configuration/TipsAndTricks.html)
-   mechanism, so only the compositor cursor remains.
+## What the installer does
+
+1. Builds a tiny Wayland proxy (`wlproxy`).
+2. Puts it and a launcher wrapper into Sober's data folder.
+3. Creates transparent Roblox cursor textures from your installed `base.apk`.
+4. Adds a menu entry that starts Sober through the wrapper.
+
+If something is missing, the installer tells you exactly what to install and
+which command to use for your distribution.
 
 ## Requirements
 
-- Linux with a Wayland session (tested on KDE Plasma 6; should work on any
-  compositor)
-- Sober installed via Flatpak (`org.vinegarhq.Sober`)
-- A C compiler and `make` to build the proxy
-- `python3` to generate the cursor overlay
+- Linux with a **Wayland** session (tested on KDE Plasma 6)
+- **Sober** installed via Flatpak
+- `cc`/`gcc` + `make` and `python3`
+  (the installer prints the install command for your distro if they are
+  missing)
 
-## Install
+## After installing
 
-```sh
-git clone https://github.com/<your-username>/sober-cursor-fix.git
-cd sober-cursor-fix
-./scripts/install.sh
-```
-
-The installer is per-user and needs no root. It:
-
-- builds `wlproxy` (static binary),
-- installs it and a launcher wrapper into
-  `~/.var/app/org.vinegarhq.Sober/data/`,
-- reads the installed Roblox `base.apk` and writes transparent cursor textures
-  into `~/.var/app/org.vinegarhq.Sober/data/sober/asset_overlay/`,
-- installs a desktop entry in `~/.local/share/applications/` that launches Sober
-  through the wrapper.
-
-Then launch **Sober from the application menu** (close any running instance
-first).
-
-If Roblox has not been downloaded yet, launch Sober once and run the installer
-again so the cursor overlay can be generated.
-
-## Manual launch
-
-Launching with plain `flatpak run org.vinegarhq.Sober` bypasses the wrapper. Use
-either the menu entry or:
+- Launch Sober from the **application menu**.
+- If Sober was already running, close it and open it again.
+- Launching with `flatpak run org.vinegarhq.Sober` from a terminal bypasses the
+  fix. Use the menu entry or:
 
 ```sh
-flatpak run --command="$HOME/.var/app/org.vinegarhq.Sober/data/sober-wrapper.sh" \
-    org.vinegarhq.Sober
+flatpak run --command="$HOME/.var/app/org.vinegarhq.Sober/data/sober-wrapper.sh" org.vinegarhq.Sober
 ```
 
 ## Uninstall
 
 ```sh
-./scripts/uninstall.sh
+./uninstall.sh
 ```
 
-This restores the stock desktop entry and removes only the cursor textures that
-were installed (other files in `asset_overlay` are left alone).
+or:
+
+```sh
+./install.sh --uninstall
+```
+
+This restores the stock menu entry and removes only the files the installer
+created. Other files in `asset_overlay` are left untouched.
+
+## If something goes wrong
+
+<details>
+<summary><b>Cursor is still hidden</b></summary>
+
+Check the log:
+
+```sh
+tail -f ~/.var/app/org.vinegarhq.Sober/data/wlproxy.log
+```
+
+When the mouse enters the Sober window you should see lines like
+`drop wl_pointer.set_cursor(NULL)`. If the log stays empty, make sure you
+started Sober from the menu entry and not with a plain `flatpak run`.
+</details>
+
+<details>
+<summary><b>I see two cursors</b></summary>
+
+The cursor textures were not applied. Make sure Roblox is downloaded, run
+`./install.sh` again and restart Sober.
+</details>
+
+<details>
+<summary><b>Roblox updated</b></summary>
+
+Run `./install.sh` again. It regenerates the cursor textures for the new
+version.
+</details>
+
+<details>
+<summary><b>I want the technical details</b></summary>
+
+See [How it works](#how-it-works) below.
+</details>
 
 ## How it works
 
@@ -94,7 +113,7 @@ for Sober and `SOBER_WL_REAL=wayland-N` for the proxy.
 
 The proxy tracks the object graph just enough to identify `wl_pointer` objects
 (`wl_display.get_registry` → `wl_registry.bind` → `wl_seat.get_pointer`) and
-removes `set_cursor` calls whose surface argument is `NULL`. It also exits
+removes `set_cursor` calls whose surface argument is `NULL`. It exits
 automatically when its parent (Sober) dies.
 
 Build it yourself with:
@@ -113,22 +132,15 @@ make             # dynamic binary
 writes a fully transparent RGBA PNG of the same size into `asset_overlay`.
 Sober prefers files from `asset_overlay` over the APK.
 
-## Troubleshooting
+## Project layout
 
-- **Cursor is still hidden.** Check
-  `~/.var/app/org.vinegarhq.Sober/data/wlproxy.log`; you should see
-  `drop wl_pointer.set_cursor(NULL)` lines when the pointer enters the window.
-  Set `WLPROXY_DEBUG=1` for verbose output.
-- **Two cursors.** The overlay was not applied. Make sure the APK exists and
-  re-run `./scripts/install.sh`, then restart Sober.
-- **Roblox updated.** Cursor file names or sizes may change. Re-run
-  `./scripts/install.sh` to regenerate the overlay.
-- **Launched from a terminal.** `flatpak run org.vinegarhq.Sober` does not use
-  the wrapper; see [Manual launch](#manual-launch).
-- **X11 session.** Sober uses X11 there and this fix is a no-op; the wrapper
-  simply starts Sober normally.
-- **Multiple Sober instances.** The proxy uses a fixed socket name, so only one
-  instance is supported.
+```
+install.sh              installer
+uninstall.sh            uninstaller
+src/wlproxy.c           Wayland cursor proxy
+scripts/sober-wrapper.sh  launcher used by the menu entry
+scripts/gen_overlay.py  transparent cursor texture generator
+```
 
 ## Files installed
 
@@ -140,7 +152,11 @@ Sober prefers files from `asset_overlay` over the APK.
 └── sober/asset_overlay/   # transparent cursor textures
 ~/.local/share/applications/org.vinegarhq.Sober.desktop
 ```
-MADE WITH AI
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+---
+
+MADE WITH AI
