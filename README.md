@@ -11,8 +11,8 @@ system cursor stays visible, and Roblox's duplicate cursor disappears.
 ## Quick start
 
 ```sh
-git clone https://github.com/teapond/my-project.git
-cd my-project
+git clone https://github.com/teapond/sober-cursor-fix.git
+cd sober-cursor-fix
 ./install.sh
 ```
 
